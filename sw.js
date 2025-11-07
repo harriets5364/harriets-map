@@ -1,7 +1,7 @@
-// Minimal service worker: caches app shell, but does NOT aggressively cache tiles.
-// Network-first for tile requests to avoid stale/partial tiles.
-const CACHE_NAME = 'harriet-map-shell-v3';
+// Harriet's Tea Room Map - Service Worker v4
+// Fixes mobile caching & ensures updates apply automatically
 
+const CACHE_NAME = 'harriet-map-shell-v4';
 const APP_SHELL = [
   './index.html',
   './manifest.json',
@@ -11,30 +11,45 @@ const APP_SHELL = [
   'https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css'
 ];
 
-self.addEventListener('install', (ev) => {
-  ev.waitUntil(
+// Install: cache app shell
+self.addEventListener('install', (event) => {
+  event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
   );
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (ev) => {
-  ev.waitUntil(clients.claim());
+// Activate: clear old caches immediately
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.map((key) => key !== CACHE_NAME && caches.delete(key)))
+    )
+  );
+  self.clients.claim();
 });
 
-self.addEventListener('fetch', (ev) => {
-  const req = ev.request;
+// Fetch: network-first for map tiles; cache-first for app shell
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+
+  // Always try network first for OpenStreetMap tiles
   if (req.url.includes('tile.openstreetmap.org')) {
-    // Network-first for tiles
-    ev.respondWith(fetch(req).catch(() => caches.match(req)));
+    event.respondWith(fetch(req).catch(() => caches.match(req)));
     return;
   }
-  ev.respondWith(
+
+  // Cache-first for app shell (HTML, JS, CSS)
+  event.respondWith(
     caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req).then((res) => {
-        return caches.open(CACHE_NAME).then((cache) => { cache.put(req, res.clone()); return res; });
-      }).catch(() => cached);
+      const fetchPromise = fetch(req)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+          return response;
+        })
+        .catch(() => cached);
+      return cached || fetchPromise;
     })
   );
 });
