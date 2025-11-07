@@ -1,6 +1,7 @@
 // Minimal service worker: caches app shell, but does NOT aggressively cache tiles.
 // Network-first for tile requests to avoid stale/partial tiles.
-const CACHE_NAME = 'harriet-map-shell-v2';
+const CACHE_NAME = 'harriet-map-shell-v3';
+
 const APP_SHELL = [
   './index.html',
   './manifest.json',
