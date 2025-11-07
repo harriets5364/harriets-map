@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Harriet's Tea Room — Walk to us</title>
+  <meta name="theme-color" content="#0088ff" />
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+  <style>
+    html, body { height: 100%; margin: 0; padding: 0; background: #f4f4f4; }
+    #map { width: 100%; height: 100%; }
+    .topbar {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      top: 10px;
+      z-index: 1100;
+      background: rgba(255,255,255,0.95);
+      padding: 10px 12px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      font-family: Arial, sans-serif;
+      max-width: 360px;
+      width: 90%;
+      text-align: center;
+    }
+    .topbar button {
+      background: #0088ff;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    #loading {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      font-family: Arial, sans-serif;
+      font-size: 18px;
+      background: linear-gradient(180deg, #f4f4f4, #ffffff);
+      color: #333;
+    }
+    .notice {
+      font-size: 14px;
+      color: #555;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">Locating you…</div>
+  <div id="map"></div>
+  <div class="topbar" id="topbar" style="display:none;">
+    <div style="font-weight:600; font-size:16px;">Harriet's Tea Room — Directions</div>
+    <div class="notice" id="status">Tap 'Allow' if asked to use your location.</div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
+  <script>
+    // Destination: Harriet's Tea Room (Avenida Ámsterdam 3)
+    const harriet = { lat: 28.05379, lng: -16.71157 };
+
+    // Initialize map
+    const map = L.map('map', { zoomControl: false }).setView([harriet.lat, harriet.lng], 16);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    const destMarker = L.marker([harriet.lat, harriet.lng]).addTo(map).bindPopup("Harriet's Tea Room");
+
+    // Routing control (walking profile)
+    const routingControl = L.Routing.control({
+      waypoints: [],
+      router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1', profile: 'foot' }),
+      showAlternatives: false,
+      routeWhileDragging: false,
+      fitSelectedRoutes: true,
+      createMarker: function(i, wp, nWps) {
+        if (i === nWps - 1) {
+          return L.marker(wp.latLng).bindPopup("Harriet's Tea Room");
+        } else {
+          return L.marker(wp.latLng).bindPopup('You are here');
+        }
+      }
+    }).addTo(map);
+
+    // Helpers
+    function showLoading(text) {
+      const ld = document.getElementById('loading');
+      ld.style.display = 'flex';
+      ld.textContent = text || 'Loading…';
+    }
+    function hideLoading() {
+      const ld = document.getElementById('loading');
+      ld.style.display = 'none';
+    }
+    function showTopbar(msg) {
+      const tb = document.getElementById('topbar');
+      tb.style.display = 'block';
+      document.getElementById('status').textContent = msg || '';
+    }
+
+    // Attempt to get high-accuracy location
+    function startRoutingFrom(position) {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      const userLatLng = L.latLng(lat, lng);
+      // place a user marker and draw route to Harriet
+      routingControl.setWaypoints([userLatLng, L.latLng(harriet.lat, harriet.lng)]);
+      // center map nicely
+      map.setView(userLatLng, 16);
+      hideLoading();
+      showTopbar('Tap map to open step-by-step directions');
+    }
+
+    function locationDenied() {
+      hideLoading();
+      showTopbar("Location blocked — showing Harriet's Tea Room. Tap to open directions.");
+      // show fallback route starting point slightly north of Harriet (so it displays a route)
+      routingControl.setWaypoints([L.latLng(harriet.lat + 0.002, harriet.lng - 0.002), L.latLng(harriet.lat, harriet.lng)]);
+      map.setView([harriet.lat, harriet.lng], 16);
+    }
+
+    // Robust location fetch with timeout and fallback
+    function tryGeolocation() {
+      if (!navigator.geolocation) {
+        locationDenied();
+        return;
+      }
+      showLoading('Locating you — please allow location access');
+      const opts = { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 };
+      let called = false;
+      const success = (pos) => {
+        if (called) return;
+        called = true;
+        try {
+          startRoutingFrom(pos);
+        } catch (e) {
+          locationDenied();
+        }
+      };
+      const failure = (err) => {
+        if (called) return;
+        called = true;
+        locationDenied();
+      };
+      navigator.geolocation.getCurrentPosition(success, failure, opts);
+      // Also fallback after 12s in case browser never responds
+      setTimeout(() => { if (!called) { called = true; locationDenied(); } }, 12000);
+    }
+
+    // Ensure proper map sizing on mobile and after display
+    function ensureMapResize() {
+      setTimeout(() => {
+        try { map.invalidateSize(); } catch (e) {}
+      }, 600);
+    }
+
+    window.addEventListener('load', () => {
+      // Wait a short moment, then start geolocation and ensure map sizing
+      ensureMapResize();
+      tryGeolocation();
+    });
+
+    // If the page regains focus (e.g. after permission dialog), re-run resize and geolocation
+    window.addEventListener('focus', () => { ensureMapResize(); });
+
+    // Orientation change
+    window.addEventListener('orientationchange', () => { ensureMapResize(); });
+
+    // Make dest marker open popup when tapped
+    destMarker.on('click', () => destMarker.openPopup());
+
+    // When user taps the map area, open native step-by-step directions using Google Maps as fallback
+    map.on('click', () => {
+      const gmapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${harriet.lat},${harriet.lng}&travelmode=walking`;
+      window.open(gmapsUrl, '_blank');
+    });
+  </script>
+</body>
+</html>
