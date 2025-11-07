@@ -1,8 +1,10 @@
 {
-  "name": "Harriet's Tea Room Map",
-  "short_name": "Harriet Map",
+  "name": "Harriet's Tea Room — Los Cristianos Map",
+  "short_name": "Harriet's Map",
+  "description": "Walking directions from anywhere in Los Cristianos to Harriet's Tea Room.",
   "start_url": "./index.html",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#0088ff",
   "icons": [
