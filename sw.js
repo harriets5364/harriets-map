@@ -1,7 +1,7 @@
 // Harriet's Tea Room Map - Service Worker v4
 // Fixes mobile caching & ensures updates apply automatically
 
-const CACHE_NAME = 'harriet-map-shell-v5';
+const CACHE_NAME = 'harriet-map-shell-v6';
 const APP_SHELL = [
   './index.html',
   './manifest.json',
